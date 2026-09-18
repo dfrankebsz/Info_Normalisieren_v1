@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1300 610">
+<rect width="1300" height="610" fill="#f8fbfc"/><text x="55" y="65" font-family="Arial" font-size="34" font-weight="800" fill="#173044">Redundanz kann Datenanomalien auslösen</text>
+<g font-family="Arial"><rect x="70" y="130" width="350" height="390" rx="24" fill="#fff" stroke="#d4e0e6" stroke-width="3"/>
+<text x="245" y="185" text-anchor="middle" font-size="24" font-weight="800" fill="#9a3f3c">Ändern</text>
+<text x="105" y="240" font-size="17" fill="#173044">Teamleitung „Kramer“ steht</text><text x="105" y="270" font-size="17" fill="#173044">in mehreren Crew-Zeilen.</text>
+<rect x="105" y="315" width="280" height="50" rx="10" fill="#fdeceb"/><text x="245" y="346" text-anchor="middle" font-size="17" fill="#873634">nur eine Kopie geändert</text>
+<text x="245" y="420" text-anchor="middle" font-size="19" font-weight="700" fill="#173044">→ widersprüchliche Daten</text>
+<rect x="475" y="130" width="350" height="390" rx="24" fill="#fff" stroke="#d4e0e6" stroke-width="3"/>
+<text x="650" y="185" text-anchor="middle" font-size="24" font-weight="800" fill="#9a651a">Einfügen</text>
+<text x="510" y="240" font-size="17" fill="#173044">Ein neues Team soll erfasst</text><text x="510" y="270" font-size="17" fill="#173044">werden, aber noch ohne Crew.</text>
+<rect x="510" y="315" width="280" height="50" rx="10" fill="#fff4d6"/><text x="650" y="346" text-anchor="middle" font-size="17" fill="#745510">Struktur erzwingt Zusatzdaten</text>
+<text x="650" y="420" text-anchor="middle" font-size="19" font-weight="700" fill="#173044">→ Einfügeproblem</text>
+<rect x="880" y="130" width="350" height="390" rx="24" fill="#fff" stroke="#d4e0e6" stroke-width="3"/>
+<text x="1055" y="185" text-anchor="middle" font-size="24" font-weight="800" fill="#5b4598">Löschen</text>
+<text x="915" y="240" font-size="17" fill="#173044">Der letzte Workshop in Raum</text><text x="915" y="270" font-size="17" fill="#173044">L3 wird gelöscht.</text>
+<rect x="915" y="315" width="280" height="50" rx="10" fill="#eee9ff"/><text x="1055" y="346" text-anchor="middle" font-size="17" fill="#5a4298">Raumtyp geht mit verloren</text>
+<text x="1055" y="420" text-anchor="middle" font-size="19" font-weight="700" fill="#173044">→ Löschproblem</text></g>
+</svg>
