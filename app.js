@@ -1,9 +1,9 @@
-
 const CHAPTERS = window.COURSE_DATA;
-const COURSE_KEY = "normalize-lab-v1";
-const SESSION_KEY = "normalize-lab-session-v1";
-const LOCAL_USERS_KEY = "normalize-lab-local-users";
-let cloudConfig={configured:false}, session=null, profile=null, localMode=false, authMode="login", currentChapter="home", pendingSolution=null, saveTimer=null;
+CHAPTERS.forEach(c=>{c.tasks.forEach((t,i)=>t.afb=i<2?1:(i<6?2:3));if(c.bonus)c.bonus.afb=(c.id==="c2"||c.id==="c5")?3:2;});
+const COURSE_KEY = "normalize-lab-blobs-v2";
+const SESSION_KEY = "normalize-lab-blobs-session-v2";
+const LOCAL_USERS_KEY = "normalize-lab-local-users-v2";
+let cloudAvailable=false, session=null, profile=null, localMode=false, authMode="login", currentChapter="home", pendingSolution=null, saveTimer=null;
 
 const shopItems=[
  {id:"theme-graphite",kind:"theme",cost:80,name:"Graphite Theme",preview:"⬛",value:"theme-graphite"},
@@ -36,91 +36,74 @@ function eqArr(a,b){return a.length===b.length && [...a].sort().every((x,i)=>x==
 function toast(msg){const el=document.querySelector("#toast");el.textContent=msg;el.classList.add("show");clearTimeout(toast._t);toast._t=setTimeout(()=>el.classList.remove("show"),2600);}
 function confetti(){const box=document.querySelector("#confetti");const chars=["◆","●","★","✦","▰"];for(let i=0;i<24;i++){const s=document.createElement("span");s.className="piece";s.textContent=chars[i%chars.length];s.style.left=Math.random()*100+"vw";s.style.animationDelay=Math.random()*.35+"s";box.appendChild(s);setTimeout(()=>s.remove(),1900);}}
 
-async function shaNickname(nick){
- const clean=nick.trim().toLowerCase().normalize("NFKD");
- const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(clean));
- return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("").slice(0,40)+"@normalize.local";
+async function shaText(value){
+ const buf=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(String(value)));
+ return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+async function apiFetch(name,opts={}){
+ const headers={"Content-Type":"application/json",...(opts.headers||{})};
+ if(session?.token)headers.Authorization="Bearer "+session.token;
+ const r=await fetch(`/.netlify/functions/${name}`,{...opts,headers,cache:"no-store"});
+ const data=await r.json().catch(()=>({}));
+ if(!r.ok)throw new Error(data.error||`Serverfehler (${r.status})`);
+ return data;
 }
 async function loadCloudConfig(){
- try{const r=await fetch("/.netlify/functions/config",{cache:"no-store"});cloudConfig=await r.json();}catch(e){cloudConfig={configured:false};}
- const status=document.querySelector("#cloudStatus"), demo=document.querySelector("#localDemoBtn");
- if(cloudConfig.configured){status.textContent="Cloud-Synchronisierung verfügbar.";demo.classList.add("hidden");}
- else{status.textContent="Cloud ist noch nicht konfiguriert. Der Kurs kann lokal getestet werden.";demo.classList.remove("hidden");}
-}
-async function cloudFetch(path, opts={}){
- if(!cloudConfig.configured) throw new Error("Cloud nicht konfiguriert");
- if(session?.expires_at && Date.now()>session.expires_at-60000) await refreshSession();
- const headers={"apikey":cloudConfig.anonKey,"Content-Type":"application/json",...(opts.headers||{})};
- if(session?.access_token) headers.Authorization="Bearer "+session.access_token;
- const r=await fetch(cloudConfig.url+path,{...opts,headers});
- if(!r.ok){const txt=await r.text();throw new Error(txt||("HTTP "+r.status));}
- if(r.status===204)return null;
- const txt=await r.text();return txt?JSON.parse(txt):null;
-}
-async function refreshSession(){
- if(!session?.refresh_token) throw new Error("Sitzung abgelaufen");
- const r=await fetch(cloudConfig.url+"/auth/v1/token?grant_type=refresh_token",{method:"POST",headers:{"apikey":cloudConfig.anonKey,"Content-Type":"application/json"},body:JSON.stringify({refresh_token:session.refresh_token})});
- if(!r.ok) throw new Error("Sitzung konnte nicht erneuert werden");
- const data=await r.json();session={...data,expires_at:Date.now()+data.expires_in*1000};localStorage.setItem(SESSION_KEY,JSON.stringify(session));
+ const status=document.querySelector("#cloudStatus"), demo=document.querySelector("#localDemoBtn"), teacher=document.querySelector("#teacherSetupBtn");
+ try{const data=await apiFetch("status",{method:"GET"});cloudAvailable=!!data.configured;}catch(e){cloudAvailable=false;}
+ if(cloudAvailable){status.textContent="Netlify Blobs: Cloud-Synchronisierung verfügbar.";demo.classList.add("hidden");teacher.classList.remove("hidden");}
+ else{status.textContent="Netlify Functions/Blobs sind lokal nicht erreichbar. Für die Vorschau steht ein lokaler Demo-Modus bereit.";demo.classList.remove("hidden");teacher.classList.add("hidden");}
 }
 async function loginCloud(nickname,password){
- const email=await shaNickname(nickname);
- const r=await fetch(cloudConfig.url+"/auth/v1/token?grant_type=password",{method:"POST",headers:{"apikey":cloudConfig.anonKey,"Content-Type":"application/json"},body:JSON.stringify({email,password})});
- if(!r.ok){const x=await r.json().catch(()=>({}));throw new Error(x.error_description||x.msg||"Anmeldung fehlgeschlagen");}
- const data=await r.json();session={...data,expires_at:Date.now()+data.expires_in*1000};localStorage.setItem(SESSION_KEY,JSON.stringify(session));
- await loadProfileAndProgress();
+ const data=await apiFetch("auth-login",{method:"POST",body:JSON.stringify({nickname,password})});
+ session={token:data.token};localStorage.setItem(SESSION_KEY,JSON.stringify(session));
+ profile=data.profile;state={...defaultState(),...(data.state||{})};currentChapter=state.currentChapter||"home";
+ localStorage.setItem(COURSE_KEY+"-"+profile.user_id,JSON.stringify(state));
 }
 async function registerCloud(nickname,password){
- const r=await fetch("/.netlify/functions/register",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nickname,password})});
- const data=await r.json().catch(()=>({}));
- if(!r.ok) throw new Error(data.error||"Registrierung fehlgeschlagen");
+ await apiFetch("auth-register",{method:"POST",body:JSON.stringify({nickname,password})});
  await loginCloud(nickname,password);
 }
 async function loadProfileAndProgress(){
- const uid=session.user?.id;
- const ps=await cloudFetch(`/rest/v1/profiles?user_id=eq.${encodeURIComponent(uid)}&select=user_id,nickname,role`);
- profile=ps?.[0]||{user_id:uid,nickname:"Lernender",role:"student"};
- const pr=await cloudFetch(`/rest/v1/progress?user_id=eq.${encodeURIComponent(uid)}&select=state,updated_at`);
- state={...defaultState(),...(pr?.[0]?.state||{})};currentChapter=state.currentChapter||"home";
- localStorage.setItem(COURSE_KEY+"-"+uid,JSON.stringify(state));
+ const me=await apiFetch("auth-me",{method:"GET"});profile=me.profile;
+ const pr=await apiFetch("progress",{method:"GET"});state={...defaultState(),...(pr.state||{})};currentChapter=state.currentChapter||"home";
+ localStorage.setItem(COURSE_KEY+"-"+profile.user_id,JSON.stringify(state));
 }
 async function saveCloud(){
- if(localMode||!session||!cloudConfig.configured)return;
- try{
-  await cloudFetch("/rest/v1/progress?on_conflict=user_id",{method:"POST",headers:{"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify({user_id:profile.user_id,state})});
-  document.querySelector("#syncLabel").textContent="Cloud gespeichert";
- }catch(e){document.querySelector("#syncLabel").textContent="lokal gespeichert";console.warn(e);}
+ if(localMode||!session||!cloudAvailable)return;
+ try{await apiFetch("progress",{method:"PUT",body:JSON.stringify({state})});document.querySelector("#syncLabel").textContent="Cloud gespeichert";}
+ catch(e){document.querySelector("#syncLabel").textContent="lokal gespeichert";console.warn(e);}
 }
 function saveState(){
  const key=COURSE_KEY+"-"+(profile?.user_id||profile?.nickname||"demo");localStorage.setItem(key,JSON.stringify(state));
- clearTimeout(saveTimer);saveTimer=setTimeout(saveCloud,500);
+ clearTimeout(saveTimer);saveTimer=setTimeout(saveCloud,700);
 }
 async function restoreSession(){
- if(!cloudConfig.configured)return false;
- try{
-  const raw=localStorage.getItem(SESSION_KEY);if(!raw)return false;session=JSON.parse(raw);
-  if(session.expires_at && Date.now()>session.expires_at-60000)await refreshSession();
-  const u=await cloudFetch("/auth/v1/user");session.user=u;await loadProfileAndProgress();return true;
- }catch(e){localStorage.removeItem(SESSION_KEY);session=null;return false;}
+ if(!cloudAvailable)return false;
+ try{const raw=localStorage.getItem(SESSION_KEY);if(!raw)return false;session=JSON.parse(raw);if(!session?.token)return false;await loadProfileAndProgress();return true;}
+ catch(e){localStorage.removeItem(SESSION_KEY);session=null;return false;}
 }
+
+async function setupTeacher(nickname,password,setupCode){
+ const data=await apiFetch("teacher-setup",{method:"POST",body:JSON.stringify({nickname,password,setupCode})});
+ session={token:data.token};localStorage.setItem(SESSION_KEY,JSON.stringify(session));
+ profile=data.profile;state={...defaultState(),...(data.state||{})};currentChapter=state.currentChapter||"home";
+ localStorage.setItem(COURSE_KEY+"-"+profile.user_id,JSON.stringify(state));
+}
+
 async function localLogin(nick,password){
- const users=JSON.parse(localStorage.getItem(LOCAL_USERS_KEY)||"{}");const key=norm(nick);
- const hash=await shaNickname(password);
- if(authMode==="register"){
-   if(users[key])throw new Error("Nickname existiert lokal bereits.");
-   users[key]={nickname:nick,hash};localStorage.setItem(LOCAL_USERS_KEY,JSON.stringify(users));
- }else{
-   if(!users[key]||users[key].hash!==hash)throw new Error("Nickname oder Passwort stimmt lokal nicht.");
- }
- localMode=true;profile={user_id:"local-"+key,nickname:users[key].nickname,role:"student"};
- state={...defaultState(),...JSON.parse(localStorage.getItem(COURSE_KEY+"-"+profile.user_id)||"{}")};currentChapter=state.currentChapter||"home";
+ const users=JSON.parse(localStorage.getItem(LOCAL_USERS_KEY)||"{}");const key=norm(nick);const hash=await shaText(password);
+ if(authMode==="register"){if(users[key])throw new Error("Nickname existiert lokal bereits.");users[key]={nickname:nick,hash};localStorage.setItem(LOCAL_USERS_KEY,JSON.stringify(users));}
+ else{if(!users[key]||users[key].hash!==hash)throw new Error("Nickname oder Passwort stimmt lokal nicht.");}
+ localMode=true;profile={user_id:"local-"+key,nickname:users[key].nickname,role:"student"};state={...defaultState(),...JSON.parse(localStorage.getItem(COURSE_KEY+"-"+profile.user_id)||"{}")};currentChapter=state.currentChapter||"home";
 }
 
 function showCourse(){
  document.querySelector("#authScreen").classList.add("hidden");document.querySelector("#courseApp").classList.remove("hidden");
  applyTheme();renderNav();render();updateHUD();
 }
-function logout(){
+async function logout(){
+ try{if(session?.token&&!localMode)await apiFetch("auth-logout",{method:"POST",body:"{}"});}catch(e){}
  localStorage.removeItem(SESSION_KEY);session=null;profile=null;localMode=false;document.querySelector("#courseApp").classList.add("hidden");document.querySelector("#authScreen").classList.remove("hidden");document.querySelector("#passwordInput").value="";
 }
 function applyTheme(){
@@ -220,7 +203,7 @@ function renderShop(){
  document.querySelectorAll("[data-shop]").forEach(b=>b.onclick=()=>{const it=shopItems.find(x=>x.id===b.dataset.shop);if(!state.shopUnlocked.includes(it.id)){if(state.xp<it.cost)return;state.shopUnlocked.push(it.id);toast(`${it.name} freigeschaltet`);confetti();}if(it.kind==="theme")state.theme=it.value;if(it.kind==="avatar")state.avatar=it.value;if(it.kind==="pet")state.pet=it.value;if(it.kind==="outfit")state.outfit=it.value;saveState();applyTheme();renderShop();});
 }
 async function adminCall(action,payload={}){
- const r=await fetch("/.netlify/functions/admin",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+session.access_token},body:JSON.stringify({action,...payload})});const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||"Aktion fehlgeschlagen");return data;
+ const r=await fetch("/.netlify/functions/admin",{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+session.token},body:JSON.stringify({action,...payload})});const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||"Aktion fehlgeschlagen");return data;
 }
 async function loadTeacher(){
  const box=document.querySelector("#teacherContent");box.textContent="Lade Daten …";
@@ -240,7 +223,23 @@ document.querySelector("#menuBtn").onclick=()=>{document.querySelector("#sidebar
 document.querySelector("#scrim").onclick=()=>{document.querySelector("#sidebar").classList.remove("open");document.querySelector("#scrim").classList.remove("show");};
 
 document.querySelectorAll("[data-auth-tab]").forEach(b=>b.onclick=()=>{authMode=b.dataset.authTab;document.querySelectorAll("[data-auth-tab]").forEach(x=>x.classList.toggle("active",x===b));document.querySelector("#authSubmit").textContent=authMode==="login"?"Anmelden":"Registrieren";document.querySelector("#passwordInput").autocomplete=authMode==="login"?"current-password":"new-password";});
-document.querySelector("#authForm").onsubmit=async e=>{e.preventDefault();const nick=document.querySelector("#nicknameInput").value.trim(),pw=document.querySelector("#passwordInput").value,msg=document.querySelector("#authMessage");msg.textContent="";try{if(nick.length<2)throw new Error("Nickname muss mindestens 2 Zeichen lang sein.");if(pw.length<6)throw new Error("Passwort muss mindestens 6 Zeichen lang sein.");if(cloudConfig.configured){if(authMode==="register")await registerCloud(nick,pw);else await loginCloud(nick,pw);}else await localLogin(nick,pw);showCourse();}catch(err){msg.textContent=err.message;}};
+document.querySelector("#authForm").onsubmit=async e=>{e.preventDefault();const nick=document.querySelector("#nicknameInput").value.trim(),pw=document.querySelector("#passwordInput").value,msg=document.querySelector("#authMessage");msg.textContent="";try{if(nick.length<2)throw new Error("Nickname muss mindestens 2 Zeichen lang sein.");if(pw.length<6)throw new Error("Passwort muss mindestens 6 Zeichen lang sein.");if(cloudAvailable){if(authMode==="register")await registerCloud(nick,pw);else await loginCloud(nick,pw);}else await localLogin(nick,pw);showCourse();}catch(err){msg.textContent=err.message;}};
 document.querySelector("#localDemoBtn").onclick=async()=>{authMode="register";const nick=document.querySelector("#nicknameInput").value.trim()||"Demo";const pw=document.querySelector("#passwordInput").value||"demo123";try{await localLogin(nick,pw);}catch(e){authMode="login";await localLogin(nick,pw);}showCourse();};
+
+document.querySelector("#teacherSetupBtn").onclick=()=>document.querySelector("#teacherSetupDialog").showModal();
+document.querySelector("#teacherSetupForm").addEventListener("submit",async e=>{
+ e.preventDefault();
+ const nick=document.querySelector("#teacherNickInput").value.trim();
+ const pw=document.querySelector("#teacherPwInput").value;
+ const code=document.querySelector("#teacherCodeInput").value;
+ const msg=document.querySelector("#teacherSetupMessage");msg.textContent="";
+ try{
+   if(!cloudAvailable)throw new Error("Netlify Blobs sind nicht erreichbar.");
+   await setupTeacher(nick,pw,code);
+   document.querySelector("#teacherSetupDialog").close();
+   showCourse();
+   toast("Lehrerzugang eingerichtet.");
+ }catch(err){msg.textContent=err.message;}
+});
 
 (async function init(){await loadCloudConfig();if(await restoreSession())showCourse();})();

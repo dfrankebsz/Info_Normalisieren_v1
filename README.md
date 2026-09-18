@@ -1,49 +1,101 @@
-# Normalize Lab - Normalisierung bis 3NF
+# Normalize Lab – Normalisierung bis zur 3. Normalform
 
-Statischer Lernkurs für GitHub + Netlify mit optionaler Cloud-Synchronisierung über Supabase.
+Full-Stack-Lernkurs für **GitHub + Netlify** mit **Netlify Functions + Netlify Blobs**.
 
-## Enthalten
-- Redundanzfreiheit und Datenanomalien
-- 1. Normalform
-- funktionale und voll funktionale Abhängigkeiten
+## Inhalt des Kurses
+
+- Normalisierung, Redundanzfreiheit und Datenanomalien
+- Einfüge-, Änderungs- und Löschanomalien
+- 1. Normalform und atomare Werte
+- Primärschlüssel und Nichtschlüsselattribute
+- funktionale Abhängigkeit
+- voll funktionale Abhängigkeit
 - 2. Normalform
-- transitive Abhängigkeiten
+- transitive Abhängigkeit
 - 3. Normalform
-- 12 Excel-Labs mit Arbeitsdatei und Musterlösung
-- XP, Streaks, Badges, Avatar/Pet/Theme-Galerie
-- Nickname-/Passwort-Anmeldung
-- Lehrerbereich: Lernfortschritt, Fortschritt löschen, Nutzer löschen, Passwort neu setzen
+- vollständige Normalisierung von Rohdaten bis zur 3NF
+- verlinktes Erklärvideo: https://www.youtube.com/watch?v=N0M0_xWjIIE&t=314s
 
-## Netlify Deployment
-1. Den Inhalt dieses Ordners in ein GitHub-Repository laden.
-2. Repository mit Netlify verbinden.
-3. Publish directory: `.`
-4. Functions directory wird über `netlify.toml` automatisch auf `netlify/functions` gesetzt.
+Der Kurs enthält 40 reguläre interaktive Aufgaben und zusätzliche Bonusaufgaben. Die Aufgaben enthalten u. a. Single Choice, Multiple Choice, Richtig/Falsch, Drag & Drop, Reihenfolge, Abhängigkeits-Klassifikation, längere Freitextaufgaben mit Selbstkontrolle und 12 umfangreiche Excel-Labs.
 
-## Cloud-Synchronisierung / Nutzerkonten
-Für geräteübergreifenden Lernstand wird ein Supabase-Projekt benötigt.
+## Excel-Labs
 
-1. Neues Supabase-Projekt erstellen.
-2. Inhalt von `supabase_setup.sql` im Supabase SQL Editor ausführen.
-3. In Netlify unter Environment Variables setzen:
-   - `SUPABASE_URL`
-   - `SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY`
-4. Neu deployen.
+- `downloads/arbeitsdateien/` – unfertige Dateien für die Lernenden
+- `downloads/loesungen/` – Musterlösungen zum Selbstvergleich
+- `downloads/korrigierte_referenz/` – einheitlich aufbereitete Normalisierungsstufen
 
-Der Service-Role-Key wird ausschließlich in Netlify Functions verwendet und niemals an den Browser ausgeliefert.
-Ein allgemeiner Kurs-/AUTH-Schlüssel ist nicht erforderlich.
+Bei Excel-Aufgaben laden die Lernenden zunächst die Arbeitsdatei herunter. Die Musterlösung ist erst nach einer Sicherheitsabfrage erreichbar. Die Aufgabe wird anschließend per Selbstkontrolle abgeschlossen.
 
-### Lehrerzugang
-1. Gewünschten Lehrernickname ganz normal im Kurs registrieren.
-2. Danach im Supabase SQL Editor:
-   `update public.profiles set role='teacher' where lower(nickname)=lower('DEIN_NICKNAME');`
-3. Neu anmelden. Dann erscheint oben der Button `Lehrer`.
+## Nutzerkonten und Lernstand
 
-## Ohne Supabase
-Der Kurs bietet einen lokalen Testmodus. Lernfortschritt bleibt dann nur auf diesem Browser/Gerät gespeichert. Geräteübergreifender Zugriff und Lehrerfunktionen benötigen die Cloud-Konfiguration.
+Die Anwendung verwendet **keine externe Datenbank und kein Supabase**.
 
-## Excel
-Arbeitsdateien: `downloads/arbeitsdateien/`
-Musterlösungen: `downloads/loesungen/`
-Zusätzliche standardisierte Referenzstufen: `downloads/korrigierte_referenz/`
+Gespeichert wird serverseitig in Netlify Blobs:
+
+- Nutzerkonten mit Nickname und Passwort-Hash
+- Sitzungen
+- Lernfortschritt
+- XP, Badges und Streaks
+- freigeschaltete Themes, Avatare, Pets und Outfits
+
+Passwörter werden nicht im Klartext gespeichert. Die Netlify Function erzeugt mit Node.js `scrypt` einen gesalzenen Passwort-Hash.
+
+Sessions sind zufällige, serverseitig in Blobs gespeicherte Tokens. Dadurch ist **kein allgemeiner `AUTH_SECRET` oder `SESSION_SECRET` erforderlich**.
+
+## Lehrerzugang
+
+Der Lehrerbereich ermöglicht:
+
+- Übersicht über registrierte Nutzer
+- XP, Fortschritt, Badges und letzte Synchronisierung einsehen
+- Lernfortschritt eines Nutzers löschen
+- gesamten Lernfortschritt löschen
+- Passwort eines Nutzers zurücksetzen
+- Nutzer entfernen
+
+### Ersten Lehreraccount einrichten
+
+Aus Sicherheitsgründen kann nicht jeder Besucher ein Lehrerkonto anlegen. Für die einmalige Einrichtung:
+
+1. In Netlify das Projekt öffnen.
+2. Unter **Project configuration → Environment variables** eine Variable anlegen:
+   - Name: `TEACHER_SETUP_CODE`
+   - Wert: ein selbst gewählter langer, zufälliger Code
+3. Neu deployen.
+4. Auf der Login-Seite **„Lehrerzugang erstmalig einrichten“** wählen.
+5. Lehrer-Nickname, Lehrer-Passwort und den Setup-Code eingeben.
+6. Nach erfolgreicher Einrichtung kann `TEACHER_SETUP_CODE` wieder aus Netlify entfernt werden.
+
+Es ist **kein allgemeiner Kurs-/AUTH-Schlüssel** für Schüler notwendig.
+
+## Deployment über GitHub + Netlify
+
+1. Inhalt dieses Ordners in ein neues GitHub-Repository hochladen.
+2. In Netlify **Add new project → Import an existing project** wählen.
+3. GitHub-Repository auswählen.
+4. Netlify erkennt `netlify.toml` automatisch.
+5. Publish directory: `.`
+6. Functions directory: `netlify/functions`
+7. Deployment starten.
+
+Die Node-Abhängigkeit `@netlify/blobs` steht in `package.json` und wird beim Build installiert.
+
+## Netlify-Blobs-Struktur
+
+Der Kurs verwendet getrennte Stores:
+
+- `normalize-users-v2`
+- `normalize-nicknames-v2`
+- `normalize-progress-v2`
+- `normalize-sessions-v2`
+- `normalize-settings-v2`
+
+Für Authentifizierung und Lernstand wird starke Konsistenz verwendet, damit Änderungen nach Login, Passwortreset oder Fortschrittsspeicherung direkt sichtbar sind.
+
+## Lokale Vorschau
+
+Wird `index.html` ohne Netlify Functions geöffnet, bietet die Oberfläche einen lokalen Demo-Modus. Dieser speichert nur im Browser und dient ausschließlich zum Testen der Kursoberfläche. Geräteübergreifende Synchronisierung und Lehrerfunktionen funktionieren erst nach dem Netlify-Deployment.
+
+## Technischer Hinweis
+
+Netlify Blobs ist ein Key-Value-Speicher und keine relationale Datenbank. Für diesen Kurs ist die Datenstruktur bewusst einfach gehalten: ein Nutzerobjekt und ein Lernstandsobjekt je Nutzer. Der Lehrerbereich liest die registrierten Nutzer serverseitig aus und kombiniert sie mit den zugehörigen Lernständen.

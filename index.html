@@ -23,6 +23,7 @@
     <div id="authMessage" class="auth-message"></div>
     <div id="cloudStatus" class="cloud-status">Cloud-Verbindung wird geprüft …</div>
     <button id="localDemoBtn" class="secondary full hidden">Lokal testen</button>
+    <button id="teacherSetupBtn" class="teacher-setup-link hidden" type="button">Lehrerzugang erstmalig einrichten</button>
   </div>
 </div>
 
@@ -55,6 +56,18 @@
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <div id="confetti" class="confetti"></div>
+
+
+<dialog id="teacherSetupDialog" class="modal"><form method="dialog" class="modal-card" id="teacherSetupForm">
+<button class="close-x" type="button" data-close-dialog="teacherSetupDialog" aria-label="Schließen">×</button>
+<div class="modal-icon">🔐</div><h2>Lehrerzugang einrichten</h2>
+<p class="small muted">Nur für die einmalige Ersteinrichtung. Der Setup-Code wird in Netlify als <code>TEACHER_SETUP_CODE</code> gesetzt.</p>
+<label class="modal-label">Lehrer-Nickname<input id="teacherNickInput" maxlength="30" required placeholder="z. B. LehrerDB"></label>
+<label class="modal-label">Passwort<input id="teacherPwInput" type="password" minlength="6" required placeholder="mindestens 6 Zeichen"></label>
+<label class="modal-label">Setup-Code<input id="teacherCodeInput" type="password" required placeholder="Netlify Setup-Code"></label>
+<div id="teacherSetupMessage" class="auth-message" aria-live="polite"></div>
+<div class="modal-actions"><button type="button" data-close-dialog="teacherSetupDialog" class="secondary">Abbrechen</button><button id="teacherSetupSubmit" type="submit" class="primary">Lehrerzugang erstellen</button></div>
+</form></dialog>
 
 <dialog id="solutionDialog" class="modal"><form method="dialog" class="modal-card">
 <div class="modal-icon">💡</div><h2>Musterlösung wirklich anzeigen?</h2>
