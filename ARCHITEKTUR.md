@@ -1,31 +1,16 @@
-# Architektur: Netlify Functions + Netlify Blobs
+# Architektur
 
-Browser
-→ Netlify Functions
-→ Netlify Blobs
+Browser → Netlify Functions → Netlify Blobs
 
-Der Browser erhält niemals direkten Schreibzugriff auf die Blob-Stores.
+## Stores
+- `normalize-users-v3`: Benutzerprofile und Passwort-Hashes
+- `normalize-identities-v3`: Zuordnung aus normalisierter Klasse + Nickname zu User-ID
+- `normalize-progress-v3`: Lernstand je User-ID
+- `normalize-sessions-v3`: serverseitige Session-Nachweise
+- `normalize-settings-v3`: Klassenregistrierung und Lehrer-Bootstrap
 
-## Authentifizierung
+## Klassenisolation
+Eine Klasse wird beim Lehrer-Setup registriert. Schüler können sich nur für eine bereits eingerichtete Klasse registrieren. Lehrerfunktionen prüfen serverseitig, dass Zielnutzer Schüler derselben Klasse sind. `resetAllProgress` löscht daher nur Lernstände der eigenen Klasse.
 
-1. Registrierung sendet Nickname + Passwort an `auth-register`.
-2. Die Function speichert einen gesalzenen scrypt-Hash.
-3. Login erzeugt ein kryptografisch zufälliges Session-Token.
-4. Nur ein Hash des geheimen Tokenanteils wird als Blob-Key verwendet.
-5. Der Browser sendet das Token als Bearer-Token an weitere Functions.
-6. Sessions laufen nach 30 Tagen ab.
-
-## Relevante Functions
-
-- `status.mjs`
-- `auth-register.mjs`
-- `auth-login.mjs`
-- `auth-me.mjs`
-- `auth-logout.mjs`
-- `progress.mjs`
-- `teacher-setup.mjs`
-- `admin.mjs`
-
-## Lehrer-Bootstrap
-
-Die Umgebungsvariable `TEACHER_SETUP_CODE` wird nur für den einmaligen Lehrer-Bootstrap benötigt. Nach erfolgreicher Einrichtung blockiert ein Blob-Eintrag weitere Bootstrap-Versuche.
+## Gastmodus
+Der Gastmodus ruft keine Authentifizierungsfunktion auf und speichert ausschließlich in `localStorage`. Alle Lerninhalte und Aufgaben bleiben nutzbar; geräteübergreifende Synchronisierung und Lehrerzuordnung setzen ein Konto voraus.

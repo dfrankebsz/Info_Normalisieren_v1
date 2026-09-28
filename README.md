@@ -1,101 +1,55 @@
-# Normalize Lab – Normalisierung bis zur 3. Normalform
+# Normalize Lab – Normalisierung bis 3NF
 
-Full-Stack-Lernkurs für **GitHub + Netlify** mit **Netlify Functions + Netlify Blobs**.
+Interaktiver Lernkurs für Netlify mit **Netlify Functions + Netlify Blobs**. Keine Supabase- oder SQL-Einrichtung erforderlich.
 
-## Inhalt des Kurses
+## Deployment über GitHub → Netlify
+1. Inhalt dieses ZIP-Archivs in ein neues GitHub-Repository hochladen.
+2. In Netlify **Add new project / Import an existing project** wählen und das GitHub-Repository verbinden.
+3. Die Einstellungen aus `netlify.toml` werden übernommen: Publish-Verzeichnis `.` und Functions unter `netlify/functions`.
+4. Unter **Project configuration → Environment variables** die Variable `TEACHER_SETUP_CODE` mit einem selbst gewählten, langen Code anlegen. Es ist **kein allgemeiner AUTH-Schlüssel** erforderlich.
+5. Deployment ausführen. Netlify installiert die Abhängigkeit `@netlify/blobs` aus `package.json`.
 
-- Normalisierung, Redundanzfreiheit und Datenanomalien
-- Einfüge-, Änderungs- und Löschanomalien
+## Klassen und Konten
+- Der Kurs ist vollständig **ohne Anmeldung im Gastmodus** nutzbar. Der Gastfortschritt bleibt nur im jeweiligen Browser (`localStorage`).
+- Für geräteübergreifendes Arbeiten registrieren sich Schüler mit **Klasse/Kurs, Nickname und Passwort**.
+- Eine Klasse wird zuerst durch die Lehrkraft eingerichtet. Danach können Schülerkonten genau dieser Klasse registriert werden.
+- Nicknames müssen nur innerhalb derselben Klasse eindeutig sein.
+- Lehrkräfte melden sich nach der Einrichtung ebenfalls mit **Klasse/Kurs, Nickname und Passwort** an.
+
+## Lehrerzugang einrichten
+1. `TEACHER_SETUP_CODE` in Netlify setzen.
+2. Auf der Startseite `Lehrerzugang für eine Klasse einrichten` öffnen.
+3. Klasse/Kurs, Lehrer-Nickname, Passwort und Setup-Code eingeben.
+4. Pro Klasse ist ein Ersteinrichtungs-Lehrer vorgesehen.
+5. Der Lehrerbereich zeigt und verwaltet ausschließlich Schülerkonten derselben Klasse.
+
+Der Lehrerbereich kann:
+- Lernfortschritt, XP und Badges der Klasse anzeigen,
+- den Fortschritt eines Schülers zurücksetzen,
+- den Fortschritt aller Schüler **dieser Klasse** zurücksetzen,
+- Schülerkonten entfernen,
+- Schülerpasswörter neu setzen; bestehende Sitzungen werden dabei beendet.
+
+## Sicherheit / Speicherung
+- Passwörter werden serverseitig mit `scrypt` und individuellem Salt gehasht.
+- Session-Tokens werden zufällig erzeugt; serverseitig wird nur ein SHA-256-Ableitungswert für die Session verwendet.
+- Browserzugriffe auf Nutzerdaten laufen über Netlify Functions, nicht direkt auf Blobs.
+- Nutzer-, Identitäts-, Session- und Fortschrittsdaten liegen in getrennten Netlify-Blob-Stores mit Strong Consistency.
+- Klassen dienen als serverseitige Zugriffsschranke im Lehrerbereich; ein Lehrer kann keine fremde Klasse verwalten.
+
+## Kursinhalt
+- Redundanzfreiheit und Datenanomalien
 - 1. Normalform und atomare Werte
-- Primärschlüssel und Nichtschlüsselattribute
-- funktionale Abhängigkeit
-- voll funktionale Abhängigkeit
+- Primärschlüssel / Nichtschlüsselattribute
+- funktionale, voll funktionale und partielle Abhängigkeiten
 - 2. Normalform
-- transitive Abhängigkeit
+- transitive Abhängigkeiten
 - 3. Normalform
-- vollständige Normalisierung von Rohdaten bis zur 3NF
-- verlinktes Erklärvideo: https://www.youtube.com/watch?v=N0M0_xWjIIE&t=314s
+- zahlreiche Excel-Labs mit Arbeitsdateien und Musterlösungen
+- verlinktes Wiederholungsvideo
 
-Der Kurs enthält 40 reguläre interaktive Aufgaben und zusätzliche Bonusaufgaben. Die Aufgaben enthalten u. a. Single Choice, Multiple Choice, Richtig/Falsch, Drag & Drop, Reihenfolge, Abhängigkeits-Klassifikation, längere Freitextaufgaben mit Selbstkontrolle und 12 umfangreiche Excel-Labs.
+## Selbstkontrolle
+Geschlossene Formate werden automatisch gegen die hinterlegte Lösung geprüft. Längere Freitext- und Excel-Aufgaben werden **nicht semantisch automatisch bewertet**: Schüler erstellen ihre Lösung, öffnen nach einer Sicherheitsabfrage die Musterlösung und wählen anschließend `Richtig – als korrekt werten` oder `Nochmal bearbeiten`.
 
-## Excel-Labs
-
-- `downloads/arbeitsdateien/` – unfertige Dateien für die Lernenden
-- `downloads/loesungen/` – Musterlösungen zum Selbstvergleich
-- `downloads/korrigierte_referenz/` – einheitlich aufbereitete Normalisierungsstufen
-
-Bei Excel-Aufgaben laden die Lernenden zunächst die Arbeitsdatei herunter. Die Musterlösung ist erst nach einer Sicherheitsabfrage erreichbar. Die Aufgabe wird anschließend per Selbstkontrolle abgeschlossen.
-
-## Nutzerkonten und Lernstand
-
-Die Anwendung verwendet **keine externe Datenbank und kein Supabase**.
-
-Gespeichert wird serverseitig in Netlify Blobs:
-
-- Nutzerkonten mit Nickname und Passwort-Hash
-- Sitzungen
-- Lernfortschritt
-- XP, Badges und Streaks
-- freigeschaltete Themes, Avatare, Pets und Outfits
-
-Passwörter werden nicht im Klartext gespeichert. Die Netlify Function erzeugt mit Node.js `scrypt` einen gesalzenen Passwort-Hash.
-
-Sessions sind zufällige, serverseitig in Blobs gespeicherte Tokens. Dadurch ist **kein allgemeiner `AUTH_SECRET` oder `SESSION_SECRET` erforderlich**.
-
-## Lehrerzugang
-
-Der Lehrerbereich ermöglicht:
-
-- Übersicht über registrierte Nutzer
-- XP, Fortschritt, Badges und letzte Synchronisierung einsehen
-- Lernfortschritt eines Nutzers löschen
-- gesamten Lernfortschritt löschen
-- Passwort eines Nutzers zurücksetzen
-- Nutzer entfernen
-
-### Ersten Lehreraccount einrichten
-
-Aus Sicherheitsgründen kann nicht jeder Besucher ein Lehrerkonto anlegen. Für die einmalige Einrichtung:
-
-1. In Netlify das Projekt öffnen.
-2. Unter **Project configuration → Environment variables** eine Variable anlegen:
-   - Name: `TEACHER_SETUP_CODE`
-   - Wert: ein selbst gewählter langer, zufälliger Code
-3. Neu deployen.
-4. Auf der Login-Seite **„Lehrerzugang erstmalig einrichten“** wählen.
-5. Lehrer-Nickname, Lehrer-Passwort und den Setup-Code eingeben.
-6. Nach erfolgreicher Einrichtung kann `TEACHER_SETUP_CODE` wieder aus Netlify entfernt werden.
-
-Es ist **kein allgemeiner Kurs-/AUTH-Schlüssel** für Schüler notwendig.
-
-## Deployment über GitHub + Netlify
-
-1. Inhalt dieses Ordners in ein neues GitHub-Repository hochladen.
-2. In Netlify **Add new project → Import an existing project** wählen.
-3. GitHub-Repository auswählen.
-4. Netlify erkennt `netlify.toml` automatisch.
-5. Publish directory: `.`
-6. Functions directory: `netlify/functions`
-7. Deployment starten.
-
-Die Node-Abhängigkeit `@netlify/blobs` steht in `package.json` und wird beim Build installiert.
-
-## Netlify-Blobs-Struktur
-
-Der Kurs verwendet getrennte Stores:
-
-- `normalize-users-v2`
-- `normalize-nicknames-v2`
-- `normalize-progress-v2`
-- `normalize-sessions-v2`
-- `normalize-settings-v2`
-
-Für Authentifizierung und Lernstand wird starke Konsistenz verwendet, damit Änderungen nach Login, Passwortreset oder Fortschrittsspeicherung direkt sichtbar sind.
-
-## Lokale Vorschau
-
-Wird `index.html` ohne Netlify Functions geöffnet, bietet die Oberfläche einen lokalen Demo-Modus. Dieser speichert nur im Browser und dient ausschließlich zum Testen der Kursoberfläche. Geräteübergreifende Synchronisierung und Lehrerfunktionen funktionieren erst nach dem Netlify-Deployment.
-
-## Technischer Hinweis
-
-Netlify Blobs ist ein Key-Value-Speicher und keine relationale Datenbank. Für diesen Kurs ist die Datenstruktur bewusst einfach gehalten: ein Nutzerobjekt und ein Lernstandsobjekt je Nutzer. Der Lehrerbereich liest die registrierten Nutzer serverseitig aus und kombiniert sie mit den zugehörigen Lernständen.
+## Gamification
+XP, Streaks, Ränge, Kapitel-Badges und eine XP-Galerie mit Themes, Avataren, Haustieren und Outfits. Freischaltungen verbrauchen keine XP; sie werden durch erreichte XP-Schwellen verfügbar.

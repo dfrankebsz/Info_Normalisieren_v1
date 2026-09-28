@@ -1,20 +1,24 @@
 const CHAPTERS = window.COURSE_DATA;
-CHAPTERS.forEach(c=>{c.tasks.forEach((t,i)=>t.afb=i<2?1:(i<6?2:3));if(c.bonus)c.bonus.afb=(c.id==="c2"||c.id==="c5")?3:2;});
-const COURSE_KEY = "normalize-lab-blobs-v2";
-const SESSION_KEY = "normalize-lab-blobs-session-v2";
-const LOCAL_USERS_KEY = "normalize-lab-local-users-v2";
-let cloudAvailable=false, session=null, profile=null, localMode=false, authMode="login", currentChapter="home", pendingSolution=null, saveTimer=null;
+const COURSE_KEY = "normalize-lab-blobs-v3";
+const SESSION_KEY = "normalize-lab-blobs-session-v3";
+const GUEST_KEY = "normalize-lab-guest-v3";
+let cloudAvailable=false, teacherSetupReady=false, session=null, profile=null, guestMode=false, authMode="login", currentChapter="home", pendingSolution=null, saveTimer=null;
 
 const shopItems=[
- {id:"theme-graphite",kind:"theme",cost:80,name:"Graphite Theme",preview:"⬛",value:"theme-graphite"},
- {id:"avatar-robot",kind:"avatar",cost:160,name:"Data Bot",preview:"🤖",value:"🤖"},
- {id:"pet-cat",kind:"pet",cost:260,name:"Pixel Cat",preview:"🐈",value:"🐈"},
- {id:"theme-aurora",kind:"theme",cost:360,name:"Aurora Theme",preview:"🌌",value:"theme-aurora"},
- {id:"avatar-ninja",kind:"avatar",cost:480,name:"Schema Ninja",preview:"🥷",value:"🥷"},
- {id:"outfit-crown",kind:"outfit",cost:600,name:"Data Crown",preview:"👑",value:"👑"},
- {id:"pet-fox",kind:"pet",cost:700,name:"Query Fox",preview:"🦊",value:"🦊"},
- {id:"theme-violet",kind:"theme",cost:700,name:"Violet Theme",preview:"🟣",value:"theme-violet"}
-];
+ {id:"theme-graphite",kind:"theme",cost:70,name:"Graphit",preview:"⬛",value:"theme-graphite"},
+ {id:"avatar-robot",kind:"avatar",cost:120,name:"Data Bot",preview:"🤖",value:"🤖"},
+ {id:"outfit-glasses",kind:"outfit",cost:170,name:"Analyse-Brille",preview:"👓",value:"👓"},
+ {id:"pet-cat",kind:"pet",cost:220,name:"Pixel Cat",preview:"🐈",value:"🐈"},
+ {id:"theme-ocean",kind:"theme",cost:280,name:"Ocean Theme",preview:"🌊",value:"theme-ocean"},
+ {id:"avatar-scientist",kind:"avatar",cost:340,name:"Data Scientist",preview:"🧑‍🔬",value:"🧑‍🔬"},
+ {id:"pet-owl",kind:"pet",cost:400,name:"Schema Owl",preview:"🦉",value:"🦉"},
+ {id:"theme-aurora",kind:"theme",cost:460,name:"Aurora Theme",preview:"🌌",value:"theme-aurora"},
+ {id:"avatar-ninja",kind:"avatar",cost:520,name:"Schema Ninja",preview:"🥷",value:"🥷"},
+ {id:"outfit-crown",kind:"outfit",cost:580,name:"Data Crown",preview:"👑",value:"👑"},
+ {id:"pet-fox",kind:"pet",cost:640,name:"Query Fox",preview:"🦊",value:"🦊"},
+ {id:"theme-violet",kind:"theme",cost:700,name:"Violet Theme",preview:"🟣",value:"theme-violet"},
+ {id:"avatar-astronaut",kind:"avatar",cost:750,name:"Data Astronaut",preview:"🧑‍🚀",value:"🧑‍🚀"}
+]
 const badges=[
  {id:"c1",icon:"🧯",name:"Anomaly Hunter"},{id:"c2",icon:"🧱",name:"Atomic Builder"},
  {id:"c3",icon:"⛓️",name:"Dependency Pro"},{id:"c4",icon:"🧭",name:"Transit Breaker"},{id:"c5",icon:"🏁",name:"3NF Architect"}
@@ -29,6 +33,7 @@ function allTasks(){return CHAPTERS.flatMap(c=>[...c.tasks,c.bonus]);}
 function regularTasks(){return CHAPTERS.flatMap(c=>c.tasks);}
 function taskById(id){return allTasks().find(t=>t.id===id);}
 function chapterProgress(c){const ts=c.tasks; return Math.round(ts.filter(t=>state.completed[t.id]).length/ts.length*100);}
+function chapterProgressForState(c,st){const ts=c.tasks,done=st?.completed||{};return Math.round(ts.filter(t=>done[t.id]).length/ts.length*100);}
 function totalProgress(){const ts=regularTasks(); return Math.round(ts.filter(t=>state.completed[t.id]).length/ts.length*100);}
 function escapeHtml(s){return (s??"").toString().replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));}
 function norm(s){return (s||"").toString().trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/ß/g,"ss").replace(/\s+/g," ");}
@@ -49,34 +54,28 @@ async function apiFetch(name,opts={}){
  return data;
 }
 async function loadCloudConfig(){
- const status=document.querySelector("#cloudStatus"), demo=document.querySelector("#localDemoBtn"), teacher=document.querySelector("#teacherSetupBtn");
- try{const data=await apiFetch("status",{method:"GET"});cloudAvailable=!!data.configured;}catch(e){cloudAvailable=false;}
- if(cloudAvailable){status.textContent="Netlify Blobs: Cloud-Synchronisierung verfügbar.";demo.classList.add("hidden");teacher.classList.remove("hidden");}
- else{status.textContent="Netlify Functions/Blobs sind lokal nicht erreichbar. Für die Vorschau steht ein lokaler Demo-Modus bereit.";demo.classList.remove("hidden");teacher.classList.add("hidden");}
+ const status=document.querySelector("#cloudStatus"), teacher=document.querySelector("#teacherSetupBtn");
+ try{const data=await apiFetch("status",{method:"GET"});cloudAvailable=!!data.configured;teacherSetupReady=!!data.teacherSetupReady;}catch{cloudAvailable=false;teacherSetupReady=false;}
+ if(cloudAvailable){status.textContent="Netlify Blobs: Anmeldung und geräteübergreifende Synchronisierung verfügbar.";teacher.classList.toggle("hidden",!teacherSetupReady);}
+ else{status.textContent="Cloud-Anmeldung ist derzeit nicht erreichbar. Der Kurs kann weiterhin vollständig im Gastmodus bearbeitet werden.";teacher.classList.add("hidden");}
 }
-async function loginCloud(nickname,password){
- const data=await apiFetch("auth-login",{method:"POST",body:JSON.stringify({nickname,password})});
- session={token:data.token};localStorage.setItem(SESSION_KEY,JSON.stringify(session));
- profile=data.profile;state={...defaultState(),...(data.state||{})};currentChapter=state.currentChapter||"home";
- localStorage.setItem(COURSE_KEY+"-"+profile.user_id,JSON.stringify(state));
+async function loginCloud(nickname,password,className){
+ const data=await apiFetch("auth-login",{method:"POST",body:JSON.stringify({nickname,password,className})});session={token:data.token};localStorage.setItem(SESSION_KEY,JSON.stringify(session));profile=data.profile;state={...defaultState(),...(data.state||{})};currentChapter=state.currentChapter||"home";localStorage.setItem(COURSE_KEY+"-"+profile.user_id,JSON.stringify(state));
 }
-async function registerCloud(nickname,password){
- await apiFetch("auth-register",{method:"POST",body:JSON.stringify({nickname,password})});
- await loginCloud(nickname,password);
-}
+async function registerCloud(nickname,password,className){await apiFetch("auth-register",{method:"POST",body:JSON.stringify({nickname,password,className})});await loginCloud(nickname,password,className);}
 async function loadProfileAndProgress(){
  const me=await apiFetch("auth-me",{method:"GET"});profile=me.profile;
  const pr=await apiFetch("progress",{method:"GET"});state={...defaultState(),...(pr.state||{})};currentChapter=state.currentChapter||"home";
  localStorage.setItem(COURSE_KEY+"-"+profile.user_id,JSON.stringify(state));
 }
 async function saveCloud(){
- if(localMode||!session||!cloudAvailable)return;
+ if(guestMode||!session||!cloudAvailable)return;
  try{await apiFetch("progress",{method:"PUT",body:JSON.stringify({state})});document.querySelector("#syncLabel").textContent="Cloud gespeichert";}
  catch(e){document.querySelector("#syncLabel").textContent="lokal gespeichert";console.warn(e);}
 }
 function saveState(){
- const key=COURSE_KEY+"-"+(profile?.user_id||profile?.nickname||"demo");localStorage.setItem(key,JSON.stringify(state));
- clearTimeout(saveTimer);saveTimer=setTimeout(saveCloud,700);
+ if(guestMode){localStorage.setItem(GUEST_KEY,JSON.stringify(state));return;}
+ const key=COURSE_KEY+"-"+(profile?.user_id||"unknown");localStorage.setItem(key,JSON.stringify(state));clearTimeout(saveTimer);saveTimer=setTimeout(saveCloud,700);
 }
 async function restoreSession(){
  if(!cloudAvailable)return false;
@@ -84,30 +83,20 @@ async function restoreSession(){
  catch(e){localStorage.removeItem(SESSION_KEY);session=null;return false;}
 }
 
-async function setupTeacher(nickname,password,setupCode){
- const data=await apiFetch("teacher-setup",{method:"POST",body:JSON.stringify({nickname,password,setupCode})});
- session={token:data.token};localStorage.setItem(SESSION_KEY,JSON.stringify(session));
- profile=data.profile;state={...defaultState(),...(data.state||{})};currentChapter=state.currentChapter||"home";
- localStorage.setItem(COURSE_KEY+"-"+profile.user_id,JSON.stringify(state));
-}
+async function setupTeacher(nickname,password,className,setupCode){const data=await apiFetch("teacher-setup",{method:"POST",body:JSON.stringify({nickname,password,className,setupCode})});session={token:data.token};localStorage.setItem(SESSION_KEY,JSON.stringify(session));profile=data.profile;state={...defaultState(),...(data.state||{})};currentChapter=state.currentChapter||"home";localStorage.setItem(COURSE_KEY+"-"+profile.user_id,JSON.stringify(state));}
 
-async function localLogin(nick,password){
- const users=JSON.parse(localStorage.getItem(LOCAL_USERS_KEY)||"{}");const key=norm(nick);const hash=await shaText(password);
- if(authMode==="register"){if(users[key])throw new Error("Nickname existiert lokal bereits.");users[key]={nickname:nick,hash};localStorage.setItem(LOCAL_USERS_KEY,JSON.stringify(users));}
- else{if(!users[key]||users[key].hash!==hash)throw new Error("Nickname oder Passwort stimmt lokal nicht.");}
- localMode=true;profile={user_id:"local-"+key,nickname:users[key].nickname,role:"student"};state={...defaultState(),...JSON.parse(localStorage.getItem(COURSE_KEY+"-"+profile.user_id)||"{}")};currentChapter=state.currentChapter||"home";
-}
+function startGuest(){guestMode=true;session=null;profile={user_id:"guest",nickname:"Gast",role:"guest",class_name:"nicht angemeldet"};state={...defaultState(),...JSON.parse(localStorage.getItem(GUEST_KEY)||"{}")};currentChapter=state.currentChapter||"home";}
 
 function showCourse(){
- document.querySelector("#authScreen").classList.add("hidden");document.querySelector("#courseApp").classList.remove("hidden");
+ document.querySelector("#authScreen").classList.add("hidden");document.querySelector("#courseApp").classList.remove("hidden");document.querySelector("#syncLabel").textContent=guestMode?"Gast · nur dieses Gerät":"Cloud-Synchronisierung";
  applyTheme();renderNav();render();updateHUD();
 }
 async function logout(){
- try{if(session?.token&&!localMode)await apiFetch("auth-logout",{method:"POST",body:"{}"});}catch(e){}
- localStorage.removeItem(SESSION_KEY);session=null;profile=null;localMode=false;document.querySelector("#courseApp").classList.add("hidden");document.querySelector("#authScreen").classList.remove("hidden");document.querySelector("#passwordInput").value="";
+ try{if(session?.token&&!guestMode)await apiFetch("auth-logout",{method:"POST",body:"{}"});}catch{}
+ localStorage.removeItem(SESSION_KEY);session=null;profile=null;guestMode=false;document.querySelector("#courseApp").classList.add("hidden");document.querySelector("#authScreen").classList.remove("hidden");document.querySelector("#passwordInput").value="";
 }
 function applyTheme(){
- document.body.classList.remove("theme-graphite","theme-aurora","theme-violet");if(state.theme)document.body.classList.add(state.theme);
+ document.body.classList.remove("theme-graphite","theme-ocean","theme-aurora","theme-violet");if(state.theme)document.body.classList.add(state.theme);
  document.querySelector("#avatarFace").textContent=state.avatar||"🧑‍💻";document.querySelector("#petFace").textContent=state.pet||"";document.querySelector("#outfitFace").textContent=state.outfit||"";
 }
 function updateBadges(){
@@ -115,9 +104,10 @@ function updateBadges(){
  saveState();
 }
 function updateHUD(){
- document.querySelector("#xpTop").textContent=state.xp;document.querySelector("#streakTop").textContent=state.streak;document.querySelector("#nicknameSide").textContent=profile?.nickname||"Lernender";document.querySelector("#rankSide").textContent=rank().name;
+ document.querySelector("#xpTop").textContent=state.xp;document.querySelector("#streakTop").textContent=state.streak;document.querySelector("#nicknameSide").textContent=profile?.nickname||"Gast";document.querySelector("#classSide").textContent=guestMode?"Gast · lokal":`Klasse: ${profile?.class_name||"–"}`;document.querySelector("#rankSide").textContent=rank().name;
  const p=totalProgress();document.querySelector("#overallFill").style.width=p+"%";document.querySelector("#overallText").textContent=p+" %";document.querySelector("#badgeText").textContent=state.badges.length+" Badges";
  document.querySelector("#badgeGrid").innerHTML=badges.map(b=>`<div class="badge ${state.badges.includes(b.id)?"earned":""}"><div><span>${b.icon}</span>${b.name}</div></div>`).join("");
+ const next=shopItems.filter(it=>!state.shopUnlocked.includes(it.id)&&state.xp<it.cost).sort((a,b)=>a.cost-b.cost)[0];document.querySelector("#nextUnlock").textContent=next?`🔓 Nächste Freischaltung: ${next.name} bei ${next.cost} XP`:"🏆 Alle Galerie-Stufen erreichbar – starke Leistung.";
  document.querySelector("#teacherBtn").classList.toggle("hidden",profile?.role!=="teacher");applyTheme();renderNav();
 }
 function renderNav(){
@@ -128,7 +118,7 @@ function renderNav(){
 }
 function go(id){currentChapter=id;state.currentChapter=id;saveState();render();updateHUD();window.scrollTo({top:0,behavior:"smooth"});document.querySelector("#sidebar").classList.remove("open");document.querySelector("#scrim").classList.remove("show");}
 function renderHome(){
- return `<section class="hero card"><img src="assets/hero.svg" alt="Normalisierungsweg vom Datenchaos bis zur dritten Normalform"><div class="hero-copy"><div class="eyebrow">Future Skills Festival</div><h1>Normalize Lab</h1><p>Sie übernehmen die Rolle eines Junior Data Analysts. Aus unübersichtlichen Festivaldaten entsteht Schritt für Schritt ein belastbares relationales Modell.</p><div class="hero-grid"><div class="hero-chip"><strong>⚡ XP</strong><div class="small muted">lösen Aufgaben und schalten Designs frei</div></div><div class="hero-chip"><strong>📊 Cloud-Sync</strong><div class="small muted">Lernstand auf mehreren Geräten</div></div><div class="hero-chip"><strong>📗 Excel Labs</strong><div class="small muted">Arbeitsdatei bearbeiten und selbst vergleichen</div></div><div class="hero-chip"><strong>🧑‍💻 Avatar</strong><div class="small muted">Galerie mit Themes, Pets und Avataren</div></div></div></div></section>
+ return `<section class="hero card"><img src="assets/hero.svg" alt="Normalisierungsweg vom Datenchaos bis zur dritten Normalform"><div class="hero-copy"><div class="eyebrow">Future Skills Festival</div><h1>Normalize Lab</h1><p>Sie übernehmen die Rolle eines Junior Data Analysts. Aus unübersichtlichen Festivaldaten entsteht Schritt für Schritt ein belastbares relationales Modell.</p><div class="hero-grid"><div class="hero-chip"><strong>⚡ XP</strong><div class="small muted">lösen Aufgaben und schalten Designs frei</div></div><div class="hero-chip"><strong>📊 Flexibler Modus</strong><div class="small muted">Gast lokal oder mit Konto geräteübergreifend</div></div><div class="hero-chip"><strong>📗 Excel Labs</strong><div class="small muted">Arbeitsdatei bearbeiten und selbst vergleichen</div></div><div class="hero-chip"><strong>🧑‍💻 Avatar</strong><div class="small muted">Galerie mit Themes, Pets und Avataren</div></div></div></div></section>
  <section class="section card"><div class="eyebrow">Lernpfad</div><h2>Vom Problem zur 3NF</h2><div class="concept-grid">${CHAPTERS.map(c=>`<button class="concept" style="text-align:left" data-goto="${c.id}"><div style="font-size:2rem">${c.icon}</div><h3>${c.title}</h3><p>${c.intro}</p><strong>Mission öffnen →</strong></button>`).join("")}</div></section>
  <section class="section card"><div class="eyebrow">Excel-Training</div><h2>Arbeiten wie an einem echten Datenbestand</h2><p>Ein großer Teil des Kurses besteht aus Excel-Labs. Sie laden eine unfertige Datei herunter, normalisieren sie lokal in Excel oder einer kompatiblen Tabellenkalkulation und öffnen anschließend nach einer Bestätigungsabfrage die Musterlösung. Die Bewertung erfolgt bei diesen offenen Modellierungsaufgaben durch einen strukturierten Selbstvergleich.</p></section>`;
 }
@@ -143,7 +133,7 @@ function render(){
 function taskTypeName(t){return ({single:"Single Choice",multi:"Multiple Choice",tf:"Richtig / Falsch",drag:"Zuordnen",sort:"Reihenfolge",dependency:"Abhängigkeiten",free:"Freitext + Selbstcheck",excel:"Excel-Lab"})[t.type]||t.type;}
 function renderTask(t){
  const done=!!state.completed[t.id];
- return `<article class="task card ${done?"done":""} ${t.bonus?"bonus":""}" id="${t.id}"><div class="task-head"><div><div class="task-tags">${t.bonus?'<span class="tag bonus">BONUS</span>':""}<span class="tag">${taskTypeName(t)}</span></div><h3>${done?"✅ ":""}${t.title}</h3></div><div class="points">+${t.points} XP</div></div><p>${t.prompt}</p><div class="task-body">${taskBody(t)}</div>${t.type!=="free"&&t.type!=="excel"?`<div class="task-actions"><button class="primary" data-check="${t.id}">${done?"Erneut prüfen":"Antwort prüfen"}</button><button class="solution-btn" data-solution="${t.id}">Musterlösung anzeigen</button></div>`:""}<div class="feedback" id="fb-${t.id}"></div><div class="solution-panel ${state.revealed[t.id]?"show":""}" id="sol-${t.id}"><strong>Musterlösung</strong><p>${t.solution}</p>${t.solutionFile?`<a class="download-btn" href="${t.solutionFile}" download>⬇ Lösung als Excel herunterladen</a>`:""}${t.checks?`<div class="checklist">${t.checks.map(x=>`<div class="check-row">✓ ${x}</div>`).join("")}</div>`:""}${t.type==="free"||t.type==="excel"?`<div class="self-actions"><button class="primary" data-selfok="${t.id}">Richtig – als korrekt werten</button><button class="secondary" data-retry="${t.id}">Nochmal bearbeiten</button></div>`:""}</div></article>`;
+ return `<article class="task card ${done?"done":""} ${t.bonus?"bonus":""}" id="${t.id}"><div class="task-head"><div><div class="task-tags">${t.bonus?'<span class="tag bonus">BONUS</span>':""}<span class="tag afb afb${t.afb}">AFB ${["","I","II","III"][t.afb]}</span><span class="tag">${taskTypeName(t)}</span></div><h3>${done?"✅ ":""}${t.title}</h3></div><div class="points">+${t.points} XP</div></div><p>${t.prompt}</p><div class="task-body">${taskBody(t)}</div>${t.type!=="free"&&t.type!=="excel"?`<div class="task-actions"><button class="primary" data-check="${t.id}">${done?"Erneut prüfen":"Antwort prüfen"}</button><button class="solution-btn" data-solution="${t.id}">Musterlösung anzeigen</button></div>`:""}<div class="feedback" id="fb-${t.id}"></div><div class="solution-panel ${state.revealed[t.id]?"show":""}" id="sol-${t.id}"><strong>Musterlösung</strong><p>${t.solution}</p>${t.solutionFile?`<a class="download-btn" href="${t.solutionFile}" download>⬇ Lösung als Excel herunterladen</a>`:""}${t.checks?`<div class="checklist">${t.checks.map(x=>`<div class="check-row">✓ ${x}</div>`).join("")}</div>`:""}${t.type==="free"||t.type==="excel"?`<div class="self-actions"><button class="primary" data-selfok="${t.id}">Richtig – als korrekt werten</button><button class="secondary" data-retry="${t.id}">Nochmal bearbeiten</button></div>`:""}</div></article>`;
 }
 function taskBody(t){
  const saved=state.answers[t.id];
@@ -186,7 +176,7 @@ function completeTask(t,factor=1){
 }
 function requestSolution(t){pendingSolution=t;document.querySelector("#solutionDialog").showModal();}
 document.querySelector("#solutionDialog").addEventListener("close",e=>{if(e.target.returnValue==="confirm"&&pendingSolution){state.revealed[pendingSolution.id]=true;saveState();const p=document.querySelector("#sol-"+pendingSolution.id);if(p)p.classList.add("show");toast("Musterlösung eingeblendet. Vergleichen Sie gezielt.");}pendingSolution=null;});
-function selfOk(t){if(t.type==="free"){const ta=document.querySelector("#input-"+t.id);state.answers[t.id]=ta?.value||state.answers[t.id]||"";}completeTask(t,state.revealed[t.id] ? 0.75 : 1);}
+function selfOk(t){if(t.type==="free"){const ta=document.querySelector("#input-"+t.id),value=ta?.value||state.answers[t.id]||"";if(value.trim().length<5){toast("Bitte ergänzen Sie zuerst Ihre eigene Antwort.");ta?.focus();return;}state.answers[t.id]=value;}completeTask(t,state.revealed[t.id] ? 0.75 : 1);}
 function retry(t){state.revealed[t.id]=false;saveState();document.querySelector("#sol-"+t.id)?.classList.remove("show");document.querySelector("#input-"+t.id)?.focus();toast("Lösung ausgeblendet. Ihre Eingabe bleibt erhalten.");}
 let selectedDrag=null;
 function wireDrag(t,el){
@@ -196,7 +186,7 @@ function wireDrag(t,el){
 function placeDrag(t,i,cat){state.answers[t.id]=state.answers[t.id]||{};state.answers[t.id][i]=cat;saveState();render();requestAnimationFrame(()=>document.querySelector("#"+t.id)?.scrollIntoView({block:"center"}));selectedDrag=null;}
 function wireSort(t,el){const list=el.querySelector(`[data-sort="${t.id}"]`);let drag=null;list.querySelectorAll("[data-sort-item]").forEach(row=>{row.ondragstart=()=>drag=row;row.ondragover=e=>{e.preventDefault();if(drag&&drag!==row){const r=row.getBoundingClientRect();list.insertBefore(drag,e.clientY<r.top+r.height/2?row:row.nextSibling);}};row.ondragend=()=>saveSort(t,list);});list.querySelectorAll("[data-up]").forEach(b=>b.onclick=()=>{const row=b.closest(".sort-row"),p=row.previousElementSibling;if(p)list.insertBefore(row,p);saveSort(t,list);render();});list.querySelectorAll("[data-down]").forEach(b=>b.onclick=()=>{const row=b.closest(".sort-row"),n=row.nextElementSibling;if(n)list.insertBefore(n,row);saveSort(t,list);render();});}
 function saveSort(t,list){state.answers[t.id]=[...list.querySelectorAll("[data-sort-item]")].map(x=>x.dataset.sortItem);saveState();}
-function wireTasks(c){[...c.tasks,c.bonus].forEach(t=>{const el=document.querySelector("#"+t.id);if(!el)return;el.querySelector(`[data-check="${t.id}"]`)?.addEventListener("click",()=>checkTask(t));el.querySelector(`[data-solution="${t.id}"]`)?.addEventListener("click",()=>requestSolution(t));el.querySelector(`[data-free-solution="${t.id}"]`)?.addEventListener("click",()=>{state.answers[t.id]=document.querySelector("#input-"+t.id)?.value||"";saveState();requestSolution(t);});el.querySelector(`[data-excel-solution="${t.id}"]`)?.addEventListener("click",()=>requestSolution(t));el.querySelector(`[data-selfok="${t.id}"]`)?.addEventListener("click",()=>selfOk(t));el.querySelector(`[data-retry="${t.id}"]`)?.addEventListener("click",()=>retry(t));if(t.type==="drag")wireDrag(t,el);if(t.type==="sort")wireSort(t,el);});}
+function wireTasks(c){[...c.tasks,c.bonus].forEach(t=>{const el=document.querySelector("#"+t.id);if(!el)return;el.querySelector(`[data-check="${t.id}"]`)?.addEventListener("click",()=>checkTask(t));el.querySelector(`[data-solution="${t.id}"]`)?.addEventListener("click",()=>requestSolution(t));el.querySelector(`[data-free-solution="${t.id}"]`)?.addEventListener("click",()=>{const value=document.querySelector("#input-"+t.id)?.value||"";if(value.trim().length<5){toast("Bitte formulieren Sie zuerst eine eigene Antwort.");document.querySelector("#input-"+t.id)?.focus();return;}state.answers[t.id]=value;saveState();requestSolution(t);});el.querySelector(`[data-excel-solution="${t.id}"]`)?.addEventListener("click",()=>requestSolution(t));el.querySelector(`[data-selfok="${t.id}"]`)?.addEventListener("click",()=>selfOk(t));el.querySelector(`[data-retry="${t.id}"]`)?.addEventListener("click",()=>retry(t));if(t.type==="drag")wireDrag(t,el);if(t.type==="sort")wireSort(t,el);});}
 
 function renderShop(){
  document.querySelector("#shopGrid").innerHTML=shopItems.map(it=>{const owned=state.shopUnlocked.includes(it.id),eligible=state.xp>=it.cost;const active=(it.kind==="theme"&&state.theme===it.value)||(it.kind==="avatar"&&state.avatar===it.value)||(it.kind==="pet"&&state.pet===it.value)||(it.kind==="outfit"&&state.outfit===it.value);return `<div class="shop-item ${!eligible&&!owned?"locked":""}"><div class="shop-preview">${it.preview}</div><h3>${it.name}</h3><p class="small muted">Freischaltung ab ${it.cost} XP</p><button class="${owned?"secondary":"primary"} full" data-shop="${it.id}" ${!eligible&&!owned?"disabled":""}>${active?"Aktiv":owned?"Ausrüsten":"Freischalten"}</button></div>`;}).join("");
@@ -207,35 +197,37 @@ async function adminCall(action,payload={}){
 }
 async function loadTeacher(){
  const box=document.querySelector("#teacherContent");box.textContent="Lade Daten …";
- try{const data=await adminCall("list");const rows=data.users.map(u=>{const st=u.state||{};const comp=Object.keys(st.completed||{}).length;const pct=Math.round(comp/regularTasks().length*100);return `<tr><td><strong>${escapeHtml(u.nickname)}</strong><br><span class="small muted">${u.role}</span></td><td>${st.xp||0}</td><td>${pct} %</td><td>${(st.badges||[]).length}</td><td>${u.updated_at?new Date(u.updated_at).toLocaleString("de-DE"):"-"}</td><td><div class="teacher-actions"><button class="mini" data-reset-progress="${u.user_id}">Fortschritt löschen</button><button class="mini" data-password="${u.user_id}">Passwort setzen</button><button class="danger mini" data-delete-user="${u.user_id}" ${u.user_id===profile.user_id?"disabled":""}>Nutzer löschen</button></div></td></tr>`;}).join("");box.innerHTML=`<div class="table-scroll"><table class="teacher-table"><thead><tr><th>Nutzer</th><th>XP</th><th>Fortschritt</th><th>Badges</th><th>letzte Synchronisierung</th><th>Aktionen</th></tr></thead><tbody>${rows}</tbody></table></div>`;
- box.querySelectorAll("[data-reset-progress]").forEach(b=>b.onclick=async()=>{if(confirm("Fortschritt dieses Nutzers wirklich löschen?")){await adminCall("resetProgress",{userId:b.dataset.resetProgress});toast("Fortschritt gelöscht.");loadTeacher();}});
- box.querySelectorAll("[data-password]").forEach(b=>b.onclick=async()=>{const pw=prompt("Neues temporäres Passwort (mindestens 6 Zeichen):");if(pw){await adminCall("resetPassword",{userId:b.dataset.password,newPassword:pw});toast("Passwort wurde gesetzt.");}});
- box.querySelectorAll("[data-delete-user]").forEach(b=>b.onclick=async()=>{if(confirm("Nutzerkonto wirklich vollständig entfernen?")){await adminCall("deleteUser",{userId:b.dataset.deleteUser});toast("Nutzer entfernt.");loadTeacher();}});
+ try{const data=await adminCall("list");document.querySelector("#teacherDialogTitle").textContent=`Lernfortschritt · ${data.className}`;const rows=data.users.map(u=>{const st=u.state||{},comp=Object.keys(st.completed||{}).length,pct=Math.round(comp/regularTasks().length*100),chapterCells=CHAPTERS.map(c=>`<span class="chapter-mini" title="${escapeHtml(c.nav)}">${chapterProgressForState(c,st)}%</span>`).join("");return `<tr><td><strong>${escapeHtml(u.nickname)}</strong></td><td>${st.xp||0}</td><td>${pct} %</td><td><div class="chapter-mini-wrap">${chapterCells}</div></td><td>${st.excelSolved||0}</td><td>${(st.badges||[]).length}</td><td>${u.updated_at?new Date(u.updated_at).toLocaleString("de-DE"):"noch nicht synchronisiert"}</td><td><div class="teacher-actions"><button class="mini" data-reset-progress="${u.user_id}">Fortschritt löschen</button><button class="mini" data-password="${u.user_id}">Passwort setzen</button><button class="danger mini" data-delete-user="${u.user_id}">Nutzer entfernen</button></div></td></tr>`;}).join("");box.innerHTML=`<div class="teacher-summary"><strong>${data.users.length}</strong> Schülerkonten sind der Klasse <strong>${escapeHtml(data.className)}</strong> zugeordnet.</div><div class="table-scroll"><table class="teacher-table"><thead><tr><th>Nickname</th><th>XP</th><th>Gesamt</th><th>Kapitel 1–5</th><th>Excel-Labs</th><th>Badges</th><th>letzte Synchronisierung</th><th>Aktionen</th></tr></thead><tbody>${rows||'<tr><td colspan="8">Noch keine Schülerkonten in dieser Klasse.</td></tr>'}</tbody></table></div>`;
+ box.querySelectorAll("[data-reset-progress]").forEach(b=>b.onclick=async()=>{if(confirm("Fortschritt dieses Schülers wirklich löschen?")){await adminCall("resetProgress",{userId:b.dataset.resetProgress});toast("Fortschritt gelöscht.");loadTeacher();}});
+ box.querySelectorAll("[data-password]").forEach(b=>b.onclick=async()=>{const pw=prompt("Neues temporäres Passwort (mindestens 6 Zeichen):");if(pw){await adminCall("resetPassword",{userId:b.dataset.password,newPassword:pw});toast("Passwort wurde gesetzt; bestehende Sitzungen wurden beendet.");}});
+ box.querySelectorAll("[data-delete-user]").forEach(b=>b.onclick=async()=>{if(confirm("Schülerkonto wirklich vollständig aus dieser Klasse entfernen?")){await adminCall("deleteUser",{userId:b.dataset.deleteUser});toast("Nutzer entfernt.");loadTeacher();}});
  }catch(e){box.innerHTML=`<div class="feedback show no">${escapeHtml(e.message)}</div>`;}
 }
 
 document.querySelectorAll("[data-close-dialog]").forEach(b=>b.onclick=()=>document.querySelector("#"+b.dataset.closeDialog).close());
 document.querySelector("#shopBtn").onclick=()=>{renderShop();document.querySelector("#shopDialog").showModal();};
 document.querySelector("#teacherBtn").onclick=()=>{document.querySelector("#teacherDialog").showModal();loadTeacher();};
-document.querySelector("#resetAllBtn").onclick=async()=>{if(confirm("Wirklich den Lernfortschritt ALLER Nutzer löschen? Nutzerkonten bleiben bestehen.")){try{await adminCall("resetAllProgress");toast("Gesamter Fortschritt wurde gelöscht.");loadTeacher();}catch(e){toast(e.message);}}};
+document.querySelector("#resetAllBtn").onclick=async()=>{if(confirm(`Wirklich den Lernfortschritt aller Schüler der Klasse ${profile?.class_name||""} löschen? Nutzerkonten bleiben bestehen.`)){try{const r=await adminCall("resetAllProgress");toast(`${r.count||0} Lernstände der Klasse wurden gelöscht.`);loadTeacher();}catch(e){toast(e.message);}}};
 document.querySelector("#logoutBtn").onclick=logout;
 document.querySelector("#menuBtn").onclick=()=>{document.querySelector("#sidebar").classList.toggle("open");document.querySelector("#scrim").classList.toggle("show");};
 document.querySelector("#scrim").onclick=()=>{document.querySelector("#sidebar").classList.remove("open");document.querySelector("#scrim").classList.remove("show");};
 
 document.querySelectorAll("[data-auth-tab]").forEach(b=>b.onclick=()=>{authMode=b.dataset.authTab;document.querySelectorAll("[data-auth-tab]").forEach(x=>x.classList.toggle("active",x===b));document.querySelector("#authSubmit").textContent=authMode==="login"?"Anmelden":"Registrieren";document.querySelector("#passwordInput").autocomplete=authMode==="login"?"current-password":"new-password";});
-document.querySelector("#authForm").onsubmit=async e=>{e.preventDefault();const nick=document.querySelector("#nicknameInput").value.trim(),pw=document.querySelector("#passwordInput").value,msg=document.querySelector("#authMessage");msg.textContent="";try{if(nick.length<2)throw new Error("Nickname muss mindestens 2 Zeichen lang sein.");if(pw.length<6)throw new Error("Passwort muss mindestens 6 Zeichen lang sein.");if(cloudAvailable){if(authMode==="register")await registerCloud(nick,pw);else await loginCloud(nick,pw);}else await localLogin(nick,pw);showCourse();}catch(err){msg.textContent=err.message;}};
-document.querySelector("#localDemoBtn").onclick=async()=>{authMode="register";const nick=document.querySelector("#nicknameInput").value.trim()||"Demo";const pw=document.querySelector("#passwordInput").value||"demo123";try{await localLogin(nick,pw);}catch(e){authMode="login";await localLogin(nick,pw);}showCourse();};
+document.querySelector("#authForm").onsubmit=async e=>{e.preventDefault();const className=document.querySelector("#classInput").value.trim(),nick=document.querySelector("#nicknameInput").value.trim(),pw=document.querySelector("#passwordInput").value,msg=document.querySelector("#authMessage");msg.textContent="";try{if(!cloudAvailable)throw new Error("Cloud-Anmeldung ist derzeit nicht erreichbar. Sie können den Gastmodus verwenden.");if(!className)throw new Error("Bitte geben Sie Ihre Klasse bzw. Ihren Kurs an.");if(nick.length<2)throw new Error("Nickname muss mindestens 2 Zeichen lang sein.");if(pw.length<6)throw new Error("Passwort muss mindestens 6 Zeichen lang sein.");if(authMode==="register")await registerCloud(nick,pw,className);else await loginCloud(nick,pw,className);showCourse();}catch(err){msg.textContent=err.message;}};
+
+document.querySelector("#guestBtn").onclick=()=>{startGuest();showCourse();};
 
 document.querySelector("#teacherSetupBtn").onclick=()=>document.querySelector("#teacherSetupDialog").showModal();
 document.querySelector("#teacherSetupForm").addEventListener("submit",async e=>{
  e.preventDefault();
+ const className=document.querySelector("#teacherClassInput").value.trim();
  const nick=document.querySelector("#teacherNickInput").value.trim();
  const pw=document.querySelector("#teacherPwInput").value;
  const code=document.querySelector("#teacherCodeInput").value;
  const msg=document.querySelector("#teacherSetupMessage");msg.textContent="";
  try{
    if(!cloudAvailable)throw new Error("Netlify Blobs sind nicht erreichbar.");
-   await setupTeacher(nick,pw,code);
+   await setupTeacher(nick,pw,className,code);
    document.querySelector("#teacherSetupDialog").close();
    showCourse();
    toast("Lehrerzugang eingerichtet.");

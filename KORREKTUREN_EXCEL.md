@@ -15,7 +15,7 @@ Die gelieferten Dateien wurden für die Kursfassungen auf eine einheitliche Schl
 ## Projekte
 
 - Projektdaten und Projektbeginne wurden vereinheitlicht, damit dieselbe fachliche Projektinstanz nicht widersprüchlich mehrfach geführt wird.
-- Die 2NF und 3NF wurden fachlich getrennt: partielle Abhängigkeiten werden in der 2NF beseitigt; transitive Abteilungsinformationen werden in der 3NF ausgelagert.
+- Die 2NF und 3NF wurden fachlich getrennt: Nichtschlüsselattribute, die nur von einem Teil des zusammengesetzten Primärschlüssels abhängen, werden für die 2NF ausgelagert; transitive Abteilungsinformationen werden in der 3NF ausgelagert.
 - Für nicht durch die Ausgangsdaten belegte Abteilungsinformationen werden keine Werte erfunden.
 
 ## Zoo
@@ -30,4 +30,4 @@ Die gelieferten Dateien wurden für die Kursfassungen auf eine einheitliche Schl
 
 ## Zusätzliche Kursdatei
 
-Für das Gesamttraining wurde ergänzend ein eigener Fall „Future Skills Festival“ erstellt. Er dient als roter Faden und enthält bewusst Wiederholungsgruppen, partielle und transitive Abhängigkeiten, sodass alle drei Normalformen nacheinander angewendet werden können.
+Für das Gesamttraining wurde ergänzend ein eigener Fall „Future Skills Festival“ erstellt. Er dient als roter Faden und enthält bewusst Wiederholungsgruppen, Abhängigkeiten von einzelnen Schlüsselteilen und transitive Abhängigkeiten, sodass alle drei Normalformen nacheinander angewendet werden können.
